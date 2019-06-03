@@ -17,3 +17,7 @@
 #define MOISTURE_CAP_CAL_WET 1865
 #define MOISTURE_RES_CAL_DRY 0
 #define MOISTURE_RES_CAL_WET 2960
+
+// battery monitoring
+#define VBAT_ENABLE  17
+#define VBAT_READ    34

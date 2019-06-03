@@ -1,6 +1,6 @@
 # Dirtball - Sensors for your garden
 
-Dirtball is a [Furball]()-variant which helps monitor gardens. It includes environmental sensors, a light sensor, and soil moisture and temperature sensors.
+Dirtball is a [Furball](https://github.com/HomeBusProjects/furball)-variant which helps monitor gardens. It includes environmental sensors, a light sensor, and soil moisture and temperature sensors.
 
 Dirtball is intended to be battery powered, so it spends most of its time in deep sleep and wakes up periodically to report in. You can fine tune the sleep time in config.h. The more often it wakes up, the  shorter its battery life.
 
@@ -54,3 +54,6 @@ Given that it will be used in wet areas like garden beds, Dirtball would like to
 
 https://wiki.dfrobot.com/Capacitive_Soil_Moisture_Sensor_SKU_SEN0193#target_0
 
+## License
+
+Dirtball's software is licensed under the [MIT license](https://romkey.mit-license.org). Hardware is open source.
