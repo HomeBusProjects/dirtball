@@ -231,7 +231,7 @@ void setup() {
 
   snprintf(buffer, LG_BUFFER_LEN, "{ \"id\": \"%s\", ", MQTT_UUID);
 
-  snprintf(sm_buffer, SM_BUFFER_LEN, "\"system\": {\"name\": \"%s\", \"build\": "%s", \"freeheap\": %d, \"reboots\": %d, \"wifi_failures\": %d, \"battery_voltage\": %0.1f, \"battery_raw\": %d, \"delay\": %d }, ", hostname, build_info, ESP.getFreeHeap(), bootCount, wifi_failures, battery_voltage/10.0, battery_raw, READING_DELAY);
+  snprintf(sm_buffer, SM_BUFFER_LEN, "\"system\": {\"name\": \"%s\", \"build\": \"%s\", \"freeheap\": %d, \"reboots\": %d, \"wifi_failures\": %d, \"battery_voltage\": %0.1f, \"battery_raw\": %d, \"delay\": %d }, ", hostname, build_info, ESP.getFreeHeap(), bootCount, wifi_failures, battery_voltage/10.0, battery_raw, READING_DELAY);
   strncat(buffer, sm_buffer, LG_BUFFER_LEN);
   
   snprintf(sm_buffer, SM_BUFFER_LEN, "\"environment\": { \"temperature\": %d, \"humidity\": %d, \"pressure\": %d }, ", temperature, humidity, pressure);
