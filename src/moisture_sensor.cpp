@@ -1,5 +1,9 @@
 #include "moisture_sensor.h"
 
+// check out analogWidth() and analogAttenuation()
+//   analogSetWidth(10);
+//  analogSetAttenuation((adc_attenuation_t)3);
+
 uint8_t Moisture_Sensor::read() {
   uint16_t raw =  analogRead(_pin); 
   int cal;

@@ -17,9 +17,17 @@ WiFiMulti wifiMulti;
 #include "bme280_sensor.h"
 BME280_Sensor bme280(MQTT_UPDATE_FREQUENCY, 0, 0, false);
 
+#include "bme680_sensor.h"
+BME680_Sensor bme680(MQTT_UPDATE_FREQUENCY, 0, 0, false);
+
 #include "tsl2561_sensor.h"
 
 TSL2561_Sensor tsl2561(MQTT_UPDATE_FREQUENCY, 0, 0, false);
+
+#include "tsl2591_sensor.h"
+
+TSL2561_Sensor tsl2591(MQTT_UPDATE_FREQUENCY, 0, 0, false);
+
 
 #include "veml6075_sensor.h"
 
@@ -70,6 +78,8 @@ RTC_DATA_ATTR int wifi_failures = 0;
 #define uS_TO_S_FACTOR 1000000
 #define SLEEP_SECONDS 60 * 10
 
+static unsigned long awake_ms;
+
 void sensors_on() {
   pinMode(ENABLE_MOISTURE_CAPACITIVE, OUTPUT);
   pinMode(ENABLE_MOISTURE_RESISTIVE, OUTPUT);
@@ -95,6 +105,8 @@ void deep_sleep() {
 
 void setup() {
   byte mac_address[6];
+
+  awake_ms = millis();
 
   pinMode(VBAT_ENABLE, OUTPUT);
   digitalWrite(VBAT_ENABLE, LOW);
@@ -128,14 +140,32 @@ void setup() {
   Serial.println("[wifi]");
 #endif
 
+#ifdef HAS_BME280
   bme280.begin();
 #ifdef VERBOSE
   Serial.println("[bme280]");
 #endif
+#endif
 
+#ifdef HAS_BME680
+  bme680.begin();
+#ifdef VERBOSE
+  Serial.println("[bme680]");
+#endif
+#endif
+
+#ifdef HAS_TSL2561
   tsl2561.begin();
 #ifdef VERBOSE
   Serial.println("[tsl2561]");
+#endif
+#endif
+
+#ifdef HAS_TSL2591
+  tsl2591.begin();
+#ifdef VERBOSE
+  Serial.println("[tsl2591]");
+#endif
 #endif
 
   veml6075.begin();
@@ -156,12 +186,10 @@ void setup() {
 #ifdef VERBOSE
   Serial.println("[resistive moisture]");
 #endif
+}
 
-  delay(READING_DELAY);
-
-  bme280.handle();
-
-  int temperature = 0, humidity = 0, pressure = 0;
+void loop() {
+  int temperature = 0, humidity = 0, pressure = 0, voc = 0;
   int dirt_temp = 0;
   uint8_t cap_moist = 0, res_moist = 0;
   uint16_t cap_moist_raw = 0, res_moist_raw = 0;
@@ -175,15 +203,34 @@ void setup() {
   uvb = veml6075.uvb();
   uvindex = veml6075.uvindex();
 
+#ifdef HAS_BME280
   bme280.handle();
   temperature = bme280.temperature();
   humidity = bme280.humidity();
   pressure = bme280.pressure();
+#endif
+  
+#ifdef HAS_BME680
+  bme680.handle();
+  temperature = bme680.temperature();
+  humidity = bme680.humidity();
+  pressure = bme680.pressure();
+  voc = bme680.gas_resistance();
+#endif
 
+#ifdef HAS_TSL2561
   tsl2561.handle();
   lux = tsl2561.lux();
   ir = tsl2561.ir();
   full = tsl2561.full();
+#endif
+
+#ifdef HAS_TSL2591
+  tsl2591.handle();
+  lux = tsl2591.lux();
+  ir = tsl2591.ir();
+  full = tsl2591.full();
+#endif
 
   // dry, cap_moist is 3263, 387, 3250, 3313
   // wet, cap_moist is 1854, 1898, 1878, 1849, 1846
@@ -195,17 +242,6 @@ void setup() {
   res_moist = moisture_res.read();
   res_moist_raw = moisture_res.read_raw();
 
-
-  // battery
-  // halved by voltage divider so scale 0 - 4096 to be 0 to 6.6
-  int battery_raw = analogRead(VBAT_READ);
-  int battery_voltage = map(battery_raw, 0, 4095, 0, 66);
-  pinMode(VBAT_ENABLE, INPUT);
-
-  Serial.printf("battery voltage is %d\n", battery_voltage);
-
-  mqtt_client.loop();
-
   sensors.requestTemperatures();
   dirt_temp = sensors.getTempC(sensor1);
 
@@ -215,6 +251,10 @@ void setup() {
     Serial.printf("Temperature %d\n", temperature);
     Serial.printf("Pressure %d\n", pressure);
     Serial.printf("Humidity %d\n", humidity);
+
+    Serial.printf("Lux %d\n", lux);
+    Serial.printf("Full %d\n", full);
+    Serial.printf("IR %d\n", ir);
 
     Serial.printf("UVA %f\n", uva);
     Serial.printf("UVB %f\n", uvb);
@@ -231,7 +271,7 @@ void setup() {
 
   snprintf(buffer, LG_BUFFER_LEN, "{ \"id\": \"%s\", ", MQTT_UUID);
 
-  snprintf(sm_buffer, SM_BUFFER_LEN, "\"system\": {\"name\": \"%s\", \"build\": \"%s\", \"freeheap\": %d, \"reboots\": %d, \"wifi_failures\": %d, \"battery_voltage\": %0.1f, \"battery_raw\": %d, \"delay\": %d }, ", hostname, build_info, ESP.getFreeHeap(), bootCount, wifi_failures, battery_voltage/10.0, battery_raw, READING_DELAY);
+  snprintf(sm_buffer, SM_BUFFER_LEN, "\"system\": {\"name\": \"%s\", \"build\": \"%s\", \"freeheap\": %d, \"reboots\": %d, \"wifi_failures\": %d,  \"delay\": %d, \"awake_ms\": %lu }, ", hostname, build_info, ESP.getFreeHeap(), bootCount, wifi_failures, READING_DELAY, millis() - awake_ms);
   strncat(buffer, sm_buffer, LG_BUFFER_LEN);
   
   snprintf(sm_buffer, SM_BUFFER_LEN, "\"environment\": { \"temperature\": %d, \"humidity\": %d, \"pressure\": %d }, ", temperature, humidity, pressure);
@@ -270,8 +310,6 @@ void setup() {
 
     if(millis() > wifi_timeout) {
       wifi_failures++;
-
-      deep_sleep();
     }
   }
 
@@ -288,10 +326,4 @@ void setup() {
   delay(250);
 
   mqtt_client.loop();
-
-  deep_sleep();
-}
-
-
-void loop() {
 }
