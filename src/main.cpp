@@ -8,6 +8,10 @@
 #include <multiball/ota_updates.h>
 #include <multiball/homebus.h>
 
+#ifdef USE_DIAGNOSTICS
+#include <diagnostics.h>
+#endif
+
 #include "dirtball.h"
 
 MultiballApp App;
@@ -25,14 +29,16 @@ void setup() {
   App.begin();
   Serial.println("[app]");
 
-  homebus_configure("dirtball", "Back Yard", "Homebus", "v4");
-  homebus_setup();
-
   //  indicator_begin();
   //  Serial.println("[indicator]");
 
   dirtball_setup();
   Serial.println("[dirtball]");
+
+#ifdef USE_DIAGNOSTICS
+  diagnostics_setup(APP_NAME);
+  Serial.println("[diagnostics]");
+#endif
 
   delay(500);
 }
@@ -41,4 +47,8 @@ void loop() {
   App.handle();
 
   dirtball_loop();
+
+#ifdef USE_DIAGNOSTICS
+  diagnostics_loop(dirtball_stream);
+#endif
 }

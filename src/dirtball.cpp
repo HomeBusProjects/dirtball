@@ -38,9 +38,7 @@ Uptime uptime;
 OneWire oneWire(DALLAS_IO_PIN);
 DallasTemperature sensors(&oneWire);
 
-#ifdef DIRTBALL_HIPSTER_ONE
 DeviceAddress sensor1 = { 0x28, 0xBD, 0xC4, 0x79, 0x97, 0x12, 0x03, 0x98 };
-#endif
 
 #ifdef DIRTBALL_CTRLH_ONE
 DeviceAddress sensor1 = { 0x28, 0xE8, 0xCD, 0x79, 0x97, 0x13, 0x3, 0x6A };
@@ -95,6 +93,49 @@ void dirtball_setup() {
   Serial.println("[resistive moisture]");
 #endif
 #endif
+
+#ifdef MQTT_HOST
+  Serial.println("[mqtt credentials]");
+  homebus_stuff(MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS, MQTT_UUID);
+#ifdef MQTT_OVERRIDE_TOPIC_PREFIX
+  homebus_mqtt_override_prefix(MQTT_OVERRIDE_TOPIC_PREFIX);
+#endif
+#endif
+
+#ifdef HOMEBUS_NO_ENVELOPE
+  homebus_use_envelope(false);
+#endif
+
+  homebus_set_provisioner(HOMEBUS_SERVER, HOMEBUS_AUTHENTICATION_TOKEN);
+
+  static const char *ro_ddcs[] = {
+		      DDC_AIR_SENSOR,
+		      DDC_AIR_QUALITY_SENSOR,
+		      DDC_AQI_SENSOR,
+		      DDC_SOIL_SENSOR,
+		      DDC_LIGHT_SENSOR,
+		      DDC_UV_SENSOR,
+		      DDC_SYSTEM,
+		      DDC_DIAGNOSTIC,
+		      NULL
+  };
+  static const char *wo_ddcs[] = { NULL };
+  static char mac_address[3*6];
+
+  strncpy(mac_address, App.mac_address().c_str(), 3*6);
+
+  // this is... wrong - needs to be sorted for proper Homebus use
+  homebus_configure("Homebus",
+		    "Dirtball garden monitor",
+		    mac_address,
+		    "",
+		    ro_ddcs,
+		    wo_ddcs);
+
+  homebus_setup();
+  Serial.println("[homebus]");
+
+
 }
 
 static boolean dirtball_air_update(char* buf, size_t buf_len) {
@@ -120,8 +161,7 @@ static boolean dirtball_air_update(char* buf, size_t buf_len) {
 
   snprintf(buf,
 	   buf_len,
-	   "{ \"id\": \"%s\", \"org.homebus.experimental.air-sensor\": { \"temperature\": %.1f, \"humidity\": %.1f, \"pressure\": %.1f } }",
-	   homebus_uuid(),
+	   "{ \"temperature\": %.1f, \"humidity\": %.1f, \"pressure\": %.1f }",
 	   temperature, humidity, pressure);
 
   Serial.println(buf);
@@ -147,8 +187,7 @@ static boolean dirtball_air_quality_update(char* buf, size_t buf_len) {
 
   snprintf(buf,
 	   buf_len,
-	   "{ \"id\": \"%s\", \"org.homebus.experimental.air-quality-sensor\": {  \"tvoc\": %0.2f, \"pm1\": %d, \"pm25\": %d, \"pm10\": %d } }",
-	   homebus_uuid(),
+	   "{ \"tvoc\": %0.2f, \"pm1\": %d, \"pm25\": %d, \"pm10\": %d }",
 	   bme680.gas_resistance(), pm1, pm25, pm10);
 
 #ifdef VERBOSE
@@ -164,8 +203,7 @@ static boolean dirtball_air_quality_update(char* buf, size_t buf_len) {
 static boolean dirtball_light_update(char* buf, size_t buf_len) {
   snprintf(buf,
 	   buf_len,
-	   "{ \"id\": \"%s\", \"org.homebus.experimental.light-sensor\": {  \"lux\": %d, \"full_light\": %d, \"ir\": %d, \"visible\": %d } }",
-	   homebus_uuid(),
+	   "{ \"lux\": %d, \"full_light\": %d, \"ir\": %d, \"visible\": %d }",
 	   tsl2591.lux(), tsl2591.full(), tsl2591.ir(), tsl2591.visible());
 
 #ifdef VERBOSE
@@ -178,8 +216,7 @@ static boolean dirtball_light_update(char* buf, size_t buf_len) {
 static boolean dirtball_uv_light_update(char* buf, size_t buf_len) {
   snprintf(buf,
 	   buf_len,
-	   "{ \"id\": \"%s\", \"org.homebus.experimental.uv-light-sensor\": {  \"uva\": %.1f, \"uvb\": %.1f, \"uvindex\": %.1f  } }",
-	   homebus_uuid(),
+	   "{ \"uva\": %.1f, \"uvb\": %.1f, \"uvindex\": %.1f }",
 	   veml6075.uva(), veml6075.uvb(), veml6075.uvindex());
 
 #ifdef VERBOSE
@@ -195,8 +232,7 @@ static boolean dirtball_soil_update(char* buf, size_t buf_len) {
 
   snprintf(buf,
 	   buf_len,
-	   "{ \"id\": \"%s\", \"org.homebus.experimental.soil-sensor\": { \"temperature\": %.1f, \"moisture\": %d, \"--moisture-raw\": %d } }",
-	   homebus_uuid(),
+	   "{ \"temperature\": %.1f, \"moisture\": %d, \"--moisture-raw\": %d }",
 	   dirt_temp, moisture_cap.read(), moisture_cap.read_raw());
 
 #ifdef VERBOSE
@@ -220,9 +256,8 @@ static boolean dirtball_system_update(char* buf, size_t buf_len) {
 
   snprintf(buf,
 	   buf_len,
-	   "{ \"id\": \"%s\", \"org.homebus.experimental.dirtball-system\": { \"name\": \"%s\", \"build\": \"%s\", \"ip\": \"%d.%d.%d.%d\", \"mac_addr\": \"%s\" } }",
-	   homebus_uuid(),
-	   App.hostname().c_str(), App.build_info().c_str(), local[0], local[1], local[2], local[3], mac_address.c_str()
+	   "{ \"name\": \"%s\", \"platform\": \"%s\", \"build\": \"%s\", \"ip\": \"%d.%d.%d.%d\", \"mac_addr\": \"%s\" }",
+	   App.hostname().c_str(), "dirtball", App.build_info().c_str(), local[0], local[1], local[2], local[3], mac_address.c_str()
 	   );
 
 #ifdef VERBOSE
@@ -233,8 +268,9 @@ static boolean dirtball_system_update(char* buf, size_t buf_len) {
 }
 
 static boolean dirtball_diagnostic_update(char* buf, size_t buf_len) {
-  snprintf(buf, buf_len, "{ \"id\": \"%s\", \"org.homebus.experimental.dirtball-diagnostic\": { \"freeheap\": %d, \"uptime\": %lu, \"rssi\": %d, \"reboots\": %d, \"wifi_failures\": %d } }",
-	   homebus_uuid(),
+  snprintf(buf,
+	   buf_len,
+	   "{ \"freeheap\": %d, \"uptime\": %lu, \"rssi\": %d, \"reboots\": %d, \"wifi_failures\": %d }",
 	   ESP.getFreeHeap(), uptime.uptime()/1000, WiFi.RSSI(), App.boot_count(), App.wifi_failures());
 
 #ifdef VERBOSE
@@ -262,25 +298,30 @@ void dirtball_loop() {
   char buffer[BUFFER_LENGTH];
 
   if(dirtball_air_update(buffer, BUFFER_LENGTH))
-    homebus_publish_to("org.homebus.experimental.air-sensor", buffer);
+    homebus_publish_to(DDC_AIR_SENSOR, buffer);
 
   if(dirtball_air_quality_update(buffer, BUFFER_LENGTH))
-    homebus_publish_to("org.homebus.experimental.air-quality-sensor", buffer);
+    homebus_publish_to(DDC_AIR_QUALITY_SENSOR, buffer);
 
   if(dirtball_light_update(buffer, BUFFER_LENGTH))
-    homebus_publish_to("org.homebus.experimental.light-sensor", buffer);
+    homebus_publish_to(DDC_LIGHT_SENSOR, buffer);
 
   if(dirtball_uv_light_update(buffer, BUFFER_LENGTH))
-    homebus_publish_to("org.homebus.experimental.uv-light-sensor", buffer);
+    homebus_publish_to(DDC_UV_SENSOR, buffer);
 
   if(dirtball_soil_update(buffer, BUFFER_LENGTH))
-    homebus_publish_to("org.homebus.experimental.soil-sensor", buffer);
+    homebus_publish_to(DDC_SOIL_SENSOR, buffer);
 
   if(dirtball_system_update(buffer, BUFFER_LENGTH))
-    homebus_publish_to("org.homebus.experimental.dirtball-system", buffer);
+    homebus_publish_to(DDC_SYSTEM, buffer);
 
   if(dirtball_diagnostic_update(buffer, BUFFER_LENGTH))
-    homebus_publish_to("org.homebus.experimental.dirtball-diagnostic", buffer);
+    homebus_publish_to(DDC_DIAGNOSTIC, buffer);
+}
+
+void homebus_mqtt_callback(char const*, char const*);
+
+void homebus_mqtt_callback(char const*, char const*) {
 }
 
 /* 
@@ -291,17 +332,15 @@ void dirtball_stream() {
   static uint8_t count = 0;
 
   if(count == 0)
-    Serial.println("TEMP PRES HUMD TVOC   IR VISB FULL  LUX  1.0  2.5 10.0  SMAX  SMIN  SAVG  SCNT  PIR");
+    Serial.println("TEMP PRES HUMD TVOC   IR VISB FULL  LUX");
 
   if(++count == 10)
     count = 0;
 
   bme680.handle();
   tsl2561.handle();
-  pms5003.handle();
-  sound_level.handle();
 
-  Serial.printf( "%03.1f %4.0f %4.0f %4.0f %4d %4d %4d %4d %4d %4d %4d %5d %5d %5d %5d    %c\n",
+  Serial.printf( "%03.1f %4.0f %4.0f %4.0f %4d %4d %4d %4d\n",
 		 bme680.temperature(),
 		 bme680.pressure(),
 		 bme680.humidity(),
@@ -309,15 +348,7 @@ void dirtball_stream() {
 		 tsl2561.ir(),
 		 tsl2561.visible(),
 		 tsl2561.full(),
-		 tsl2561.lux(),
-		 pms5003.density_1_0(),
-		 pms5003.density_2_5(),
-		 pms5003.density_10_0(),
-		 sound_level.sound_max(),
-		 sound_level.sound_min(),
-		 sound_level.sound_level(),
-		 sound_level.sample_count(),
-		 pir.presence() ? '1' : '0');
+		 tsl2561.lux());
 
   if(0) {
   Serial.println("[system]");
@@ -327,3 +358,4 @@ void dirtball_stream() {
   }
 }
 #endif
+
