@@ -15,6 +15,8 @@
 #include "sensors/tsl2561_sensor.h"
 #include "sensors/tsl2591_sensor.h"
 #include "sensors/veml6075_sensor.h"
+#include "sensors/as726x_sensor.h"
+#include "sensors/pmsa003_sensor.h"
 #include "sensors/moisture_sensor.h"
 #include "sensors/uptime.h"
 
@@ -30,6 +32,8 @@ VEML6075_Sensor veml6075(MQTT_UPDATE_FREQUENCY, 0, 0, false);
 
 Moisture_Sensor moisture_cap(MOISTURE_CAPACITIVE_PIN, MQTT_UPDATE_FREQUENCY, 0, 0, false);
 // Moisture_Sensor moisture_res(MOISTURE_RESISTIVE_PIN, MQTT_UPDATE_FREQUENCY, 0, 0, false);
+
+PMSA003_Sensor pmsa003(MQTT_UPDATE_FREQUENCY, 0, 0, false);
 
 Uptime uptime;
 
@@ -94,6 +98,8 @@ void dirtball_setup() {
 #endif
 #endif
 
+  pmsa003.begin();
+
 #ifdef MQTT_HOST
   Serial.println("[mqtt credentials]");
   homebus_stuff(MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS, MQTT_UUID);
@@ -134,8 +140,6 @@ void dirtball_setup() {
 
   homebus_setup();
   Serial.println("[homebus]");
-
-
 }
 
 static boolean dirtball_air_update(char* buf, size_t buf_len) {

@@ -1,5 +1,8 @@
 #include <Arduino.h>
 
+#include <HTTPClient.h>
+#include <Ticker.h>
+
 #include "config.h"
 #include "hw.h"
 
